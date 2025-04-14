@@ -1,51 +1,8 @@
 # LiveCue
 
-> ## ⚠️ IMPORTANT NOTICE TO THE COMMUNITY ⚠️
->
-> **This is a free, open-source initiative - NOT a full-service product!**
->
-> There are numerous paid interview preparation tools charging hundreds of dollars for comprehensive features like live audio capture, automated answer generation, and more. This project is fundamentally different:
->
-> - This is a **small, non-profit, community-driven project** with zero financial incentive behind it
-> - The entire codebase is freely available for anyone to use, modify, or extend
-> - Want features like voice support? You're welcome to integrate tools like OpenAI's Whisper or other APIs
-> - New features should come through **community contributions** - it's unreasonable to expect a single maintainer to implement premium features for free
-> - The maintainer receives no portfolio benefit, monetary compensation, or recognition for this work
->
-> **Before submitting feature requests or expecting personalized support, please understand this project exists purely as a community resource.** If you value what's been created, the best way to show appreciation is by contributing code, documentation, or helping other users.
+**LiveCue** is an AI-powered contextual assistant designed to support you in high-stakes conversations—whether you're in a meeting, interview, or client call. It processes multiple input types (audio, screenshots, raw text, etc.) in real time and delivers actionable cues, answers, or summaries—right when you need them.
 
-> ## 🔑 API KEY INFORMATION - UPDATED
->
-> We have tested and confirmed that **both Gemini, OpenAI, and Anthropic APIs work properly** with the current version. You can now provide API keys through:
->
-> 1. **Environment variables** (recommended for security):
->    - `OPENAI_API_KEY`, `GEMINI_API_KEY`, or `ANTHROPIC_API_KEY`
->    - Check the `.env.example` file for all available configuration options
->
-> 2. **Config file** (backward compatible):
->    - Located at: `C:\Users\[USERNAME]\AppData\Roaming\livecue\config.json` (on Windows) or `/Users/[USERNAME]/Library/Application Support/livecue/config.json` (on macOS)
->
-> If you are experiencing issues with your API keys:
->
-> - Try deleting your API key entry from the config file located in your user data directory
-> - Log out and log back in to the application
-> - Check your API key dashboard to verify the key is active and has sufficient credits
-> - Ensure you're using the correct API key format (OpenAI keys start with "sk-", Anthropic keys start with "sk-ant-")
-
-## Free, Open-Source AI-Powered Interview Preparation Tool
-
-This project provides a powerful alternative to premium coding interview platforms. It delivers the core functionality of paid interview preparation tools but in a free, open-source package. Using your own OpenAI API key, you get access to advanced features like AI-powered problem analysis, solution generation, and debugging assistance - all running locally on your machine.
-
-### Why This Exists
-
-The best coding interview tools are often behind expensive paywalls, making them inaccessible to many students and job seekers. This project provides the same powerful functionality without the cost barrier, letting you:
-
-- Use your own API key (pay only for what you use)
-- Run everything locally on your machine with complete privacy
-- Make customizations to suit your specific needs
-- Learn from and contribute to an open-source tool
-
-### Customization Possibilities
+## Customization Possibilities
 
 The codebase is designed to be adaptable:
 
@@ -96,7 +53,7 @@ The application is invisible to:
 Note: The application is **NOT** invisible to:
 
 - Zoom versions 6.1.6 and above
-  - https://zoom.en.uptodown.com/mac/versions (link to downgrade Zoom if needed)
+  - <https://zoom.en.uptodown.com/mac/versions> (link to downgrade Zoom if needed)
 - Mac OS native screen _recording_ (Command + Shift + 5)
 
 ## Prerequisites
@@ -140,11 +97,13 @@ npm run clean
 4. Run the appropriate script for your platform:
 
 **For Windows:**
+
 ```bash
 stealth-run.bat
 ```
 
 **For macOS/Linux:**
+
 ```bash
 # Make the script executable first
 chmod +x stealth-run.sh
@@ -158,6 +117,7 @@ chmod +x stealth-run.sh
 To create installable packages for distribution:
 
 **For macOS (DMG):**
+
 ```bash
 # Using npm
 npm run package-mac
@@ -167,6 +127,7 @@ yarn package-mac
 ```
 
 **For Windows (Installer):**
+
 ```bash
 # Using npm
 npm run package-win
@@ -178,6 +139,7 @@ yarn package-win
 The packaged applications will be available in the `release` directory.
 
 **What the scripts do:**
+
 - Create necessary directories for the application
 - Clean previous builds to ensure a fresh start
 - Build the application in production mode
@@ -271,6 +233,7 @@ This application is built with extensibility in mind. You can easily add support
 - Users can have the freedom to choose their preferred AI provider
 
 To add new models, simply extend the API integration in `electron/ProcessingHelper.ts` and add the corresponding UI options in `src/components/Settings/SettingsDialog.tsx`. The modular design makes this straightforward without disrupting existing functionality.
+
 ## Configuration
 
 ### API Keys and Model Selection
