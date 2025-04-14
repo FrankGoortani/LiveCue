@@ -133,7 +133,9 @@ const SolutionSection = ({
             <StepContent
               step={steps[currentStepIndex]}
               currentLanguage={currentLanguage}
-              previousStep={currentStepIndex > 0 ? steps[currentStepIndex - 1] : undefined}
+              previousStep={
+                currentStepIndex > 0 ? steps[currentStepIndex - 1] : undefined
+              }
             />
           ) : (
             <div className="w-full relative">
@@ -256,7 +258,9 @@ const Solutions: React.FC<SolutionsProps> = ({
   const [spaceComplexityData, setSpaceComplexityData] = useState<string | null>(
     null
   );
-  const [solutionSteps, setSolutionSteps] = useState<SolutionStep[] | null>(null);
+  const [solutionSteps, setSolutionSteps] = useState<SolutionStep[] | null>(
+    null
+  );
 
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [tooltipHeight, setTooltipHeight] = useState(0);
@@ -277,7 +281,9 @@ const Solutions: React.FC<SolutionsProps> = ({
       try {
         // If there's an active conversation, get screenshots from it
         if (activeConversation && activeConversation.id) {
-          const result = await window.electronAPI.getConversationScreenshots(activeConversation.id);
+          const result = await window.electronAPI.getConversationScreenshots(
+            activeConversation.id
+          );
           if (result.success && result.data) {
             const screenshots = result.data.map((p: any) => ({
               id: p.path,
@@ -337,37 +343,50 @@ const Solutions: React.FC<SolutionsProps> = ({
 
     // Set up event listeners
     const cleanupFunctions = [
-      window.electronAPI.onScreenshotTaken(async (data: { path: string; preview: string; conversationId?: string }) => {
-        try {
-          // If this screenshot is for our active conversation, update the list
-          if (data.conversationId && activeConversation && data.conversationId === activeConversation.id) {
-            const result = await window.electronAPI.getConversationScreenshots(activeConversation.id);
-            if (result.success && result.data) {
-              const screenshots = result.data.map((p: any) => ({
-                id: p.path,
-                path: p.path,
-                preview: p.preview,
-                timestamp: Date.now(),
-              }));
+      window.electronAPI.onScreenshotTaken(
+        async (data: {
+          path: string;
+          preview: string;
+          conversationId?: string;
+        }) => {
+          try {
+            // If this screenshot is for our active conversation, update the list
+            if (
+              data.conversationId &&
+              activeConversation &&
+              data.conversationId === activeConversation.id
+            ) {
+              const result =
+                await window.electronAPI.getConversationScreenshots(
+                  activeConversation.id
+                );
+              if (result.success && result.data) {
+                const screenshots = result.data.map((p: any) => ({
+                  id: p.path,
+                  path: p.path,
+                  preview: p.preview,
+                  timestamp: Date.now(),
+                }));
+                setExtraScreenshots(screenshots);
+              }
+            } else {
+              // Fallback to the old behavior
+              const existing = await window.electronAPI.getScreenshots();
+              const screenshots = (Array.isArray(existing) ? existing : []).map(
+                (p) => ({
+                  id: p.path,
+                  path: p.path,
+                  preview: p.preview,
+                  timestamp: Date.now(),
+                })
+              );
               setExtraScreenshots(screenshots);
             }
-          } else {
-            // Fallback to the old behavior
-            const existing = await window.electronAPI.getScreenshots();
-            const screenshots = (Array.isArray(existing) ? existing : []).map(
-              (p) => ({
-                id: p.path,
-                path: p.path,
-                preview: p.preview,
-                timestamp: Date.now(),
-              })
-            );
-            setExtraScreenshots(screenshots);
+          } catch (error) {
+            console.error("Error loading extra screenshots:", error);
           }
-        } catch (error) {
-          console.error("Error loading extra screenshots:", error);
         }
-      }),
+      ),
       window.electronAPI.onResetView(() => {
         // Set resetting state first
         setIsResetting(true);
@@ -418,95 +437,114 @@ const Solutions: React.FC<SolutionsProps> = ({
         console.error("Processing error:", error);
       }),
       //when the initial solution is generated, we'll set the solution data to that
-      window.electronAPI.onSolutionSuccess((data: {
-        code: string;
-        thoughts: string[];
-        time_complexity: string;
-        space_complexity: string;
-        steps?: SolutionStep[];
-      }) => {
-        if (!data) {
-          console.warn("Received empty or invalid solution data");
-          return;
-        }
-        console.log({ data });
+      window.electronAPI.onSolutionSuccess(
+        (data: {
+          code: string;
+          thoughts: string[];
+          time_complexity: string;
+          space_complexity: string;
+          steps?: SolutionStep[];
+        }) => {
+          if (!data) {
+            console.warn("Received empty or invalid solution data");
+            return;
+          }
+          console.log("DEBUG: onSolutionSuccess event received", { data });
 
-        // Handle legacy solutions without steps by generating steps
-        let steps = data.steps;
-        if (!steps || steps.length === 0) {
-          console.log("Legacy solution without steps detected, generating steps");
+          // Handle legacy solutions without steps by generating steps
+          let steps = data.steps;
+          if (!steps || steps.length === 0) {
+            console.log(
+              "Legacy solution without steps detected, generating steps"
+            );
 
-          // Generate default steps from the complete solution
-          steps = [
-            {
-              title: "Understanding the Problem",
-              explanation: "First step is understanding the problem requirements and constraints.",
-              code: "// Analysis phase - no code yet"
-            },
-            {
-              title: "Basic Approach",
-              explanation: "Developing a basic solution approach.",
-              code: data.code.split('\n').slice(0, Math.ceil(data.code.split('\n').length / 3)).join('\n')
-            },
-            {
-              title: "Optimized Implementation",
-              explanation: "Improving the solution with optimizations.",
-              code: data.code.split('\n').slice(0, Math.ceil(data.code.split('\n').length * 2 / 3)).join('\n')
-            },
-            {
-              title: "Complete Solution",
-              explanation: "The full implementation with all edge cases handled.",
-              code: data.code
-            }
-          ];
-        }
+            // Generate default steps from the complete solution
+            steps = [
+              {
+                title: "Understanding the Problem",
+                explanation:
+                  "First step is understanding the problem requirements and constraints.",
+                code: "// Analysis phase - no code yet",
+              },
+              {
+                title: "Basic Approach",
+                explanation: "Developing a basic solution approach.",
+                code: data.code
+                  .split("\n")
+                  .slice(0, Math.ceil(data.code.split("\n").length / 3))
+                  .join("\n"),
+              },
+              {
+                title: "Optimized Implementation",
+                explanation: "Improving the solution with optimizations.",
+                code: data.code
+                  .split("\n")
+                  .slice(0, Math.ceil((data.code.split("\n").length * 2) / 3))
+                  .join("\n"),
+              },
+              {
+                title: "Complete Solution",
+                explanation:
+                  "The full implementation with all edge cases handled.",
+                code: data.code,
+              },
+            ];
+          }
+          // Add the solution to the active conversation
+          if (activeConversation) {
+            console.log(
+              "DEBUG: Adding solution to conversation",
+              activeConversation.id
+            );
+            addSolutionMessage(activeConversation.id, {
+              code: data.code,
+              thoughts: data.thoughts,
+              time_complexity: data.time_complexity,
+              space_complexity: data.space_complexity,
+              steps: steps,
+              problem_statement: queryClient.getQueryData([
+                "problem_statement",
+              ]),
+            });
+          }
 
-        // Add the solution to the active conversation
-        if (activeConversation) {
-          addSolutionMessage(activeConversation.id, {
+          const solutionData = {
             code: data.code,
             thoughts: data.thoughts,
             time_complexity: data.time_complexity,
             space_complexity: data.space_complexity,
             steps: steps,
-            problem_statement: queryClient.getQueryData(["problem_statement"])
-          });
+          };
+
+          queryClient.setQueryData(["solution"], solutionData);
+          setSolutionData(solutionData.code || null);
+          setThoughtsData(solutionData.thoughts || null);
+          setTimeComplexityData(solutionData.time_complexity || null);
+          setSpaceComplexityData(solutionData.space_complexity || null);
+          setSolutionSteps(solutionData.steps || null);
+
+          // Fetch latest screenshots when solution is successful
+          const fetchScreenshots = async () => {
+            try {
+              const existing = await window.electronAPI.getScreenshots();
+              const screenshots =
+                existing.previews?.map(
+                  (p: { path: string; preview: string }) => ({
+                    id: p.path,
+                    path: p.path,
+                    preview: p.preview,
+                    timestamp: Date.now(),
+                  })
+                ) || [];
+              setExtraScreenshots(screenshots);
+            } catch (error) {
+              console.error("Error loading extra screenshots:", error);
+              setExtraScreenshots([]);
+            }
+          };
+          fetchScreenshots();
         }
-
-        const solutionData = {
-          code: data.code,
-          thoughts: data.thoughts,
-          time_complexity: data.time_complexity,
-          space_complexity: data.space_complexity,
-          steps: steps,
-        };
-
-        queryClient.setQueryData(["solution"], solutionData);
-        setSolutionData(solutionData.code || null);
-        setThoughtsData(solutionData.thoughts || null);
-        setTimeComplexityData(solutionData.time_complexity || null);
-        setSpaceComplexityData(solutionData.space_complexity || null);
-        setSolutionSteps(solutionData.steps || null);
-
-        // Fetch latest screenshots when solution is successful
-        const fetchScreenshots = async () => {
-          try {
-            const existing = await window.electronAPI.getScreenshots();
-            const screenshots =
-              existing.previews?.map((p: { path: string; preview: string }) => ({
-                id: p.path,
-                path: p.path,
-                preview: p.preview,
-                timestamp: Date.now(),
-              })) || [];
-            setExtraScreenshots(screenshots);
-          } catch (error) {
-            console.error("Error loading extra screenshots:", error);
-            setExtraScreenshots([]);
-          }
-        };
-        fetchScreenshots();
-      }),
+      ),
 
       //########################################################
       //DEBUG EVENTS
@@ -586,7 +624,9 @@ const Solutions: React.FC<SolutionsProps> = ({
 
     try {
       // If we have an active conversation, include its ID when deleting
-      const conversationId = activeConversation ? activeConversation.id : undefined;
+      const conversationId = activeConversation
+        ? activeConversation.id
+        : undefined;
 
       const response = await window.electronAPI.deleteScreenshot(
         screenshotToDelete.path,
@@ -596,7 +636,9 @@ const Solutions: React.FC<SolutionsProps> = ({
       if (response.success) {
         // Fetch screenshots for the active conversation
         if (conversationId) {
-          const result = await window.electronAPI.getConversationScreenshots(conversationId);
+          const result = await window.electronAPI.getConversationScreenshots(
+            conversationId
+          );
           if (result.success && result.data) {
             const screenshots = result.data.map((p: any) => ({
               id: p.path,

@@ -282,9 +282,6 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
         return { success: false, error: "API key required" };
       }
 
-      // Check if we have messages and proceed even without screenshots
-      const hasMessages = Array.isArray(messages) && messages.length > 0;
-
       await deps.processingHelper?.processScreenshots(conversationId, messages);
       return { success: true };
     } catch (error) {

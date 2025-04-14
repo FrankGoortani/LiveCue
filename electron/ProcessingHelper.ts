@@ -324,10 +324,8 @@ export class ProcessingHelper {
 
         // Only set view to solutions if processing succeeded
         console.log("Setting view to solutions after successful processing");
-        mainWindow.webContents.send(
-          this.deps.PROCESSING_EVENTS.SOLUTION_SUCCESS,
-          result.data
-        );
+        // Removed duplicate SOLUTION_SUCCESS event emission that was causing solutions to be added twice
+        // The event is already emitted in processScreenshotsHelper
         this.deps.setView("solutions");
       } catch (error: any) {
         mainWindow.webContents.send(
@@ -524,14 +522,18 @@ export class ProcessingHelper {
           {
             role: "system" as const,
             content:
-              "You are a coding challenge interpreter. Follow these steps: 1- Review everything in the screenshot. 2- Find the problem in the screenshot we want to solve. 3- Follow the pattern and language requested in the screenshot; if language is not clear, use the preferred language provided. 4- Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language. Just return the structured JSON without any other text.",
+              imageDataList.length > 0
+                ? "You are a coding challenge interpreter. Follow these steps: 1- Review everything in the screenshot. 2- Find the problem in the screenshot we want to solve. 3- Follow the pattern and language requested in the screenshot; if language is not clear, use the preferred language provided. 4- Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language. Just return the structured JSON without any other text."
+                : "You are a coding challenge interpreter. Analyze the conversation context provided. Extract the coding problem details and return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language. Just return the structured JSON without any other text.",
           },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const,
-              text: `Review these screenshots carefully. Find the problem we need to solve. First, look for any language explicitly mentioned in the screenshot and use that. Only if no language is specified in the screenshot, fall back to ${language}.${conversationContext} Return in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).`,
+              text: imageDataList.length > 0
+                ? `Review these screenshots carefully. Find the problem we need to solve. First, look for any language explicitly mentioned in the screenshot and use that. Only if no language is specified in the screenshot, fall back to ${language}.${conversationContext} \n Return in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).`
+                : `Based on the conversation context provided${conversationContext ? "" : " (if any)"}, extract the coding problem details. Use ${language} as the programming language unless another language is clearly specified in the context. \n Return in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).`,
               },
               ...(imageDataList.length > 0 ? imageDataList.map((data) => ({
                 type: "image_url" as const,
@@ -546,8 +548,8 @@ export class ProcessingHelper {
           await this.openaiClient.chat.completions.create({
             model: config.extractionModel || "gpt-4o",
             messages: openaiMessages,
-            max_tokens: 4000,
-            temperature: 0.2,
+            max_tokens: 16384,
+            temperature: 0.1,
           });
 
         // Parse the response
@@ -592,20 +594,46 @@ export class ProcessingHelper {
         }
 
         try {
+          // Extract conversation context from messages if available
+          let conversationContext = "";
+          const hasConversationMessages = Array.isArray(messages) && messages.length > 0;
+
+          if (hasConversationMessages) {
+            // Get the last 20 messages at most
+            const recentMessages = messages.slice(-20);
+
+            // Format the conversation messages
+            conversationContext = recentMessages.map(msg => {
+              if (msg.type === 'text') {
+                return `User: ${(msg as any).content}`;
+              } else if (msg.type === 'solution') {
+                return `Assistant: Generated solution in ${(msg as any).language || language}`;
+              }
+              return "";
+            }).filter(text => text.length > 0).join("\n\n");
+
+            // Add a heading if we have conversation context
+            if (conversationContext) {
+              conversationContext = `\n\nRECENT CONVERSATION CONTEXT:\n${conversationContext}\n\n`;
+            }
+          }
+
           // Create Gemini message structure
           const geminiMessages: GeminiMessage[] = [
             {
               role: "user",
               parts: [
                 {
-                  text: `Follow these steps: 1- Review everything in these screenshots carefully. 2- Find the problem we need to solve. 3- Prioritize any language explicitly mentioned in the screenshot; only if no language is specified in the screenshot, fall back to ${language}. 4- Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback). Just return the structured JSON without any other text.`,
+                  text: imageDataList.length > 0
+                    ? `Follow these steps: 1- Review everything in these screenshots carefully. 2- Find the problem we need to solve. 3- Prioritize any language explicitly mentioned in the screenshot; only if no language is specified in the screenshot, fall back to ${language}. 4- Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback). Just return the structured JSON without any other text.${conversationContext}`
+                    : `Based on the conversation context provided${conversationContext ? "" : " (if any)"}, extract the coding problem details. Use ${language} as the programming language unless another language is clearly specified in the context. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback). Just return the structured JSON without any other text.${conversationContext}`,
                 },
-                ...imageDataList.map((data) => ({
+                ...(imageDataList.length > 0 ? imageDataList.map((data) => ({
                   inlineData: {
                     mimeType: "image/png",
                     data: data,
                   },
-                })),
+                })) : []),
               ],
             },
           ];
@@ -618,8 +646,8 @@ export class ProcessingHelper {
             {
               contents: geminiMessages,
               generationConfig: {
-                temperature: 0.2,
-                maxOutputTokens: 4000,
+                temperature: 0.1,
+                maxOutputTokens: 16384,
               },
             },
             { signal }
@@ -657,31 +685,58 @@ export class ProcessingHelper {
         }
 
         try {
-          const messages = [
+          // Extract conversation context from messages if available
+          let conversationContext = "";
+          const hasConversationMessages = Array.isArray(messages) && messages.length > 0;
+
+          if (hasConversationMessages) {
+            // Get the last 20 messages at most
+            const recentMessages = messages.slice(-20);
+
+            // Format the conversation messages
+            conversationContext = recentMessages.map(msg => {
+              const typedMsg = msg as any;
+              if (typedMsg.type === 'text') {
+                return `User: ${typedMsg.content}`;
+              } else if (typedMsg.type === 'solution') {
+                return `Assistant: Generated solution in ${typedMsg.language || language}`;
+              }
+              return "";
+            }).filter(text => text.length > 0).join("\n\n");
+
+            // Add a heading if we have conversation context
+            if (conversationContext) {
+              conversationContext = `\n\nRECENT CONVERSATION CONTEXT:\n${conversationContext}\n\n`;
+            }
+          }
+
+          const anthropicMessages = [
             {
               role: "user" as const,
               content: [
                 {
                   type: "text" as const,
-                  text: `Follow these steps: 1- Review everything in these screenshots carefully. 2- Find the problem we need to solve. 3- Prioritize any language explicitly mentioned in the screenshot; only if no language is specified in the screenshot, fall back to ${language}. 4- Return in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).`,
+                  text: imageDataList.length > 0
+                    ? `Follow these steps: 1- Review everything in these screenshots carefully. 2- Find the problem we need to solve. 3- Prioritize any language explicitly mentioned in the screenshot; only if no language is specified in the screenshot, fall back to ${language}. 4- Return in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).${conversationContext}`
+                    : `Based on the conversation context provided${conversationContext ? "" : " (if any)"}, extract the coding problem details. Use ${language} as the programming language unless another language is clearly specified in the context. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).${conversationContext}`,
                 },
-                ...imageDataList.map((data) => ({
+                ...(imageDataList.length > 0 ? imageDataList.map((data) => ({
                   type: "image" as const,
                   source: {
                     type: "base64" as const,
                     media_type: "image/png" as const,
                     data: data,
                   },
-                })),
+                })) : []),
               ],
             },
           ];
 
           const response = await this.anthropicClient.messages.create({
             model: config.extractionModel || "claude-3-7-sonnet-20250219",
-            max_tokens: 4000,
-            messages: messages,
-            temperature: 0.2,
+            max_tokens: 16384,
+            messages: anthropicMessages,
+            temperature: 0.1,
           });
 
           const responseText = (
@@ -1262,7 +1317,9 @@ Example steps could include:
         const messages = [
           {
             role: "system" as const,
-            content: `You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
+            content: (imageDataList.length > 0
+              ? `You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.`
+              : `You are a coding interview assistant helping debug and improve solutions. Analyze the problem statement and provide detailed debugging help.`) + `
 
 Your response MUST follow this exact structure with these section headers (use ### for headers):
 ### Issues Identified
@@ -1287,11 +1344,17 @@ If you include code examples, use proper markdown code blocks with language spec
             content: [
               {
                 type: "text" as const,
-                text: `I'm solving this coding problem: "${problemInfo.problem_statement}" in ${problemInfo.language || language}. I need help with debugging or improving my solution. Here are screenshots of my code, the errors or test cases. Please provide a detailed analysis with:
+                text: imageDataList.length > 0
+                  ? `I'm solving this coding problem: "${problemInfo.problem_statement}" in ${problemInfo.language || language}. I need help with debugging or improving my solution. Here are screenshots of my code, the errors or test cases. Please provide a detailed analysis with:
 1. What issues you found in my code
 2. Specific improvements and corrections
 3. Any optimizations that would make the solution better
-4. A clear explanation of the changes needed`,
+4. A clear explanation of the changes needed`
+                  : `I'm solving this coding problem: "${problemInfo.problem_statement}" in ${problemInfo.language || language}. I need help with debugging or improving my solution. Please provide a detailed analysis with:
+1. Potential issues to look for in my code
+2. Specific improvements and corrections to consider
+3. Any optimizations that would make the solution better
+4. A clear explanation of common pitfalls and how to avoid them`,
               },
               ...imageDataList.map((data) => ({
                 type: "image_url" as const,
@@ -1325,10 +1388,13 @@ If you include code examples, use proper markdown code blocks with language spec
         }
 
         try {
-          const debugPrompt = `
-You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
+          const debugPrompt = (imageDataList.length > 0
+            ? `You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
 
-I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving my solution.
+I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving my solution. Here are screenshots of my code, the errors or test cases.`
+            : `You are a coding interview assistant helping debug and improve solutions.
+
+I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving solutions to this type of problem.`) + `
 
 YOUR RESPONSE MUST FOLLOW THIS EXACT STRUCTURE WITH THESE SECTION HEADERS:
 ### Issues Identified
@@ -1348,18 +1414,17 @@ Here provide a clear explanation of why the changes are needed
 
 If you include code examples, use proper markdown code blocks with language specification (e.g. \`\`\`java).
 `;
-
           const geminiMessages = [
             {
               role: "user",
               parts: [
                 { text: debugPrompt },
-                ...imageDataList.map((data) => ({
+                ...(imageDataList.length > 0 ? imageDataList.map((data) => ({
                   inlineData: {
                     mimeType: "image/png",
                     data: data,
                   },
-                })),
+                })) : []),
               ],
             },
           ];
@@ -1414,10 +1479,33 @@ If you include code examples, use proper markdown code blocks with language spec
         }
 
         try {
-          const debugPrompt = `
-You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
+          const debugPrompt = imageDataList.length > 0
+            ? `You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
 
-I'm solving this coding problem: "${problemInfo.problem_statement}" in ${problemInfo.language || language}. I need help with debugging or improving my solution.
+I'm solving this coding problem: "${problemInfo.problem_statement}" in ${problemInfo.language || language}. I need help with debugging or improving my solution. Here are screenshots of my code, the errors or test cases.`
+            : `You are a coding interview assistant helping debug and improve solutions.
+
+I'm solving this coding problem: "${problemInfo.problem_statement}" in ${problemInfo.language || language}. I need help with debugging or improving solutions to this type of problem.`;
+
+          const formattedDebugPrompt = debugPrompt + `
+
+YOUR RESPONSE MUST FOLLOW THIS EXACT STRUCTURE WITH THESE SECTION HEADERS:
+### Issues Identified
+- List each issue as a bullet point with clear explanation
+
+### Specific Improvements and Corrections
+- List specific code changes needed as bullet points
+
+### Optimizations
+- List any performance optimizations if applicable
+
+### Explanation of Changes Needed
+Here provide a clear explanation of why the changes are needed
+
+### Key Points
+- Summary bullet points of the most important takeaways
+
+If you include code examples, use proper markdown code blocks with language specification.
 
 YOUR RESPONSE MUST FOLLOW THIS EXACT STRUCTURE WITH THESE SECTION HEADERS:
 ### Issues Identified
@@ -1444,16 +1532,16 @@ If you include code examples, use proper markdown code blocks with language spec
               content: [
                 {
                   type: "text" as const,
-                  text: debugPrompt,
+                  text: formattedDebugPrompt,
                 },
-                ...imageDataList.map((data) => ({
+                ...(imageDataList.length > 0 ? imageDataList.map((data) => ({
                   type: "image" as const,
                   source: {
                     type: "base64" as const,
                     media_type: "image/png" as const,
                     data: data,
                   },
-                })),
+                })) : []),
               ],
             },
           ];
