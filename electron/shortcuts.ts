@@ -51,9 +51,15 @@ export class ShortcutsHelper {
         }
       }
     });
-
     globalShortcut.register("CommandOrControl+Enter", async () => {
-      await this.deps.processingHelper?.processScreenshots();
+      // Send an event to the renderer to trigger processing with the active conversation ID and messages
+      const mainWindow = this.deps.getMainWindow();
+      if (mainWindow) {
+        mainWindow.webContents.send("trigger-cmd-enter");
+      }
+
+      // No need to process screenshots as fallback, as the updated logic
+      // in ProcessingHelper now supports processing with just messages
     });
 
     globalShortcut.register("CommandOrControl+R", () => {

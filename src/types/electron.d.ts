@@ -32,11 +32,12 @@ export interface ElectronAPI {
   onDebugError: (callback: (error: string) => void) => () => void;
   openExternal: (url: string) => void;
   toggleMainWindow: () => Promise<{ success: boolean; error?: string }>;
-  triggerScreenshot: () => Promise<{ success: boolean; error?: string }>;
-  triggerProcessScreenshots: () => Promise<{
+  triggerScreenshot: (conversationId?: string) => Promise<{ success: boolean; error?: string }>;
+  triggerProcessScreenshots: (conversationId?: string) => Promise<{
     success: boolean;
     error?: string;
   }>;
+  onCmdEnterTriggered: (callback: () => void) => () => void;
   triggerReset: () => Promise<{ success: boolean; error?: string }>;
   triggerMoveLeft: () => Promise<{ success: boolean; error?: string }>;
   triggerMoveRight: () => Promise<{ success: boolean; error?: string }>;

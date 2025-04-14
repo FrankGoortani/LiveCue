@@ -12,6 +12,7 @@ import {
 import { ToastContext } from "./contexts/toast";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { SettingsDialog } from "./components/Settings/SettingsDialog";
+import { ConversationsProvider } from "./contexts/conversations";
 
 // Create a React Query client
 const queryClient = new QueryClient({
@@ -244,27 +245,29 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <ToastContext.Provider value={{ showToast }}>
-          <div className="relative">
-            {isInitialized ? (
-              hasApiKey ? (
-                <SubscribedApp
-                  credits={credits}
-                  currentLanguage={currentLanguage}
-                  setLanguage={updateLanguage}
-                />
+          <ConversationsProvider>
+            <div className="relative">
+              {isInitialized ? (
+                hasApiKey ? (
+                  <SubscribedApp
+                    credits={credits}
+                    currentLanguage={currentLanguage}
+                    setLanguage={updateLanguage}
+                  />
+                ) : (
+                  <WelcomeScreen onOpenSettings={handleOpenSettings} />
+                )
               ) : (
-                <WelcomeScreen onOpenSettings={handleOpenSettings} />
-              )
-            ) : (
-              <div className="min-h-screen bg-black flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
-                  <p className="text-white/60 text-sm">Initializing...</p>
+                <div className="min-h-screen bg-black flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-6 h-6 border-2 border-white/20 border-t-white/80 rounded-full animate-spin"></div>
+                    <p className="text-white/60 text-sm">Initializing...</p>
+                  </div>
                 </div>
-              </div>
-            )}
-            <UpdateNotification />
-          </div>
+              )}
+              <UpdateNotification />
+            </div>
+          </ConversationsProvider>
 
           {/* Settings Dialog */}
           <SettingsDialog

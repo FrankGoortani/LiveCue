@@ -14,10 +14,12 @@ const execFileAsync = promisify(execFile);
 export class ScreenshotHelper {
   private screenshotQueue: string[] = [];
   private extraScreenshotQueue: string[] = [];
+  private conversationScreenshots: Map<string, string[]> = new Map();
   private readonly MAX_SCREENSHOTS = 5;
 
   private readonly screenshotDir: string;
   private readonly extraScreenshotDir: string;
+  private readonly conversationsDir: string;
   private readonly tempDir: string;
 
   private view: "queue" | "solutions" | "debug" = "queue";
@@ -30,6 +32,10 @@ export class ScreenshotHelper {
     this.extraScreenshotDir = path.join(
       app.getPath("userData"),
       "extra_screenshots"
+    );
+    this.conversationsDir = path.join(
+      app.getPath("userData"),
+      "conversations"
     );
     this.tempDir = path.join(
       app.getPath("temp"),
@@ -47,6 +53,7 @@ export class ScreenshotHelper {
     const directories = [
       this.screenshotDir,
       this.extraScreenshotDir,
+      this.conversationsDir,
       this.tempDir,
     ];
 
@@ -64,6 +71,7 @@ export class ScreenshotHelper {
 
   // This method replaces loadExistingScreenshots() to ensure we start with empty queues
   private cleanScreenshotDirectories(): void {
+    // Don't clean conversation screenshots as they should persist
     try {
       // Clean main screenshots directory
       if (fs.existsSync(this.screenshotDir)) {
@@ -101,10 +109,43 @@ export class ScreenshotHelper {
         }
       }
 
+      // Clean conversation directories (but keep the folder structure)
+      if (fs.existsSync(this.conversationsDir)) {
+        const conversations = fs.readdirSync(this.conversationsDir, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name);
+
+        for (const conversationId of conversations) {
+          const conversationDir = path.join(this.conversationsDir, conversationId);
+          try {
+            const files = fs.readdirSync(conversationDir)
+              .filter((file) => file.endsWith(".png"))
+              .map((file) => path.join(conversationDir, file));
+
+            // Keep track of these in our map
+            this.conversationScreenshots.set(conversationId, files);
+          } catch (err) {
+            console.error(`Error reading conversation directory ${conversationDir}:`, err);
+          }
+        }
+      }
+
       console.log("Screenshot directories cleaned successfully");
     } catch (err) {
       console.error("Error cleaning screenshot directories:", err);
     }
+  }
+
+  /**
+   * Ensures a directory exists for a specific conversation
+   */
+  private ensureConversationDirectoryExists(conversationId: string): string {
+    const conversationDir = path.join(this.conversationsDir, conversationId);
+    if (!fs.existsSync(conversationDir)) {
+      fs.mkdirSync(conversationDir, { recursive: true });
+      console.log(`Created conversation directory: ${conversationDir}`);
+    }
+    return conversationDir;
   }
 
   public getView(): "queue" | "solutions" | "debug" {
@@ -129,6 +170,13 @@ export class ScreenshotHelper {
   public getExtraScreenshotQueue(): string[] {
     console.log("Getting extra screenshot queue:", this.extraScreenshotQueue);
     return this.extraScreenshotQueue;
+  }
+
+  /**
+   * Get screenshots for a specific conversation
+   */
+  public getConversationScreenshots(conversationId: string): string[] {
+    return this.conversationScreenshots.get(conversationId) || [];
   }
 
   public clearQueues(): void {
@@ -289,9 +337,10 @@ export class ScreenshotHelper {
 
   public async takeScreenshot(
     hideMainWindow: () => void,
-    showMainWindow: () => void
+    showMainWindow: () => void,
+    conversationId?: string
   ): Promise<string> {
-    console.log("Taking screenshot in view:", this.view);
+    console.log("Taking screenshot in view:", this.view, "conversationId:", conversationId);
     hideMainWindow();
 
     // Increased delay for window hiding on Windows
@@ -307,8 +356,25 @@ export class ScreenshotHelper {
         throw new Error("Screenshot capture returned empty buffer");
       }
 
-      // Save and manage the screenshot based on current view
-      if (this.view === "queue") {
+      // Handle conversation-based screenshots if conversationId is provided
+      if (conversationId) {
+        // Ensure conversation directory exists
+        const conversationDir = this.ensureConversationDirectoryExists(conversationId);
+        const filename = `${uuidv4()}.png`;
+        screenshotPath = path.join(conversationDir, filename);
+
+        await fs.promises.writeFile(screenshotPath, screenshotBuffer);
+        console.log("Adding screenshot to conversation:", conversationId, screenshotPath);
+
+        // Add to conversation tracking map
+        const screenshots = this.conversationScreenshots.get(conversationId) || [];
+        screenshots.push(screenshotPath);
+        this.conversationScreenshots.set(conversationId, screenshots);
+
+        // No need to limit screenshots per conversation as they are part of the conversation history
+      }
+      // Otherwise, use the previous view-based behavior
+      else if (this.view === "queue") {
         screenshotPath = path.join(this.screenshotDir, `${uuidv4()}.png`);
         await fs.promises.writeFile(screenshotPath, screenshotBuffer);
         console.log("Adding screenshot to main queue:", screenshotPath);
@@ -376,14 +442,25 @@ export class ScreenshotHelper {
   }
 
   public async deleteScreenshot(
-    path: string
+    path: string,
+    conversationId?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       if (fs.existsSync(path)) {
         await fs.promises.unlink(path);
       }
 
-      if (this.view === "queue") {
+      // Handle conversation screenshots
+      if (conversationId) {
+        // Update the conversation screenshots map
+        const screenshots = this.conversationScreenshots.get(conversationId) || [];
+        this.conversationScreenshots.set(
+          conversationId,
+          screenshots.filter((filePath) => filePath !== path)
+        );
+      }
+      // Handle regular queue screenshots
+      else if (this.view === "queue") {
         this.screenshotQueue = this.screenshotQueue.filter(
           (filePath) => filePath !== path
         );

@@ -62,10 +62,11 @@ export interface IProcessingHelperDeps {
   getScreenshotQueue: () => string[];
   getExtraScreenshotQueue: () => string[];
   clearQueues: () => void;
-  takeScreenshot: () => Promise<string>;
+  takeScreenshot: (conversationId?: string) => Promise<string>;
   getImagePreview: (filepath: string) => Promise<string>;
   deleteScreenshot: (
-    path: string
+    path: string,
+    conversationId?: string
   ) => Promise<{ success: boolean; error?: string }>;
   setHasDebugged: (value: boolean) => void;
   getHasDebugged: () => boolean;
@@ -74,7 +75,7 @@ export interface IProcessingHelperDeps {
 
 export interface IShortcutsHelperDeps {
   getMainWindow: () => BrowserWindow | null;
-  takeScreenshot: () => Promise<string>;
+  takeScreenshot: (conversationId?: string) => Promise<string>;
   getImagePreview: (filepath: string) => Promise<string>;
   processingHelper: ProcessingHelper | null;
   clearQueues: () => void;
@@ -86,19 +87,20 @@ export interface IShortcutsHelperDeps {
   moveWindowUp: () => void;
   moveWindowDown: () => void;
 }
-
 export interface IIpcHandlerDeps {
   getMainWindow: () => BrowserWindow | null;
   setWindowDimensions: (width: number, height: number) => void;
   getScreenshotQueue: () => string[];
   getExtraScreenshotQueue: () => string[];
+  getScreenshotHelper: () => ScreenshotHelper | null;
   deleteScreenshot: (
-    path: string
+    path: string,
+    conversationId?: string
   ) => Promise<{ success: boolean; error?: string }>;
   getImagePreview: (filepath: string) => Promise<string>;
   processingHelper: ProcessingHelper | null;
   PROCESSING_EVENTS: typeof state.PROCESSING_EVENTS;
-  takeScreenshot: () => Promise<string>;
+  takeScreenshot: (conversationId?: string) => Promise<string>;
   getView: () => "queue" | "solutions" | "debug";
   toggleMainWindow: () => void;
   clearQueues: () => void;
@@ -550,36 +552,36 @@ async function initializeApp() {
         "No API key found in configuration. User will need to set up."
       );
     }
-
-    initializeHelpers();
-    initializeIpcHandlers({
-      getMainWindow,
-      setWindowDimensions,
-      getScreenshotQueue,
-      getExtraScreenshotQueue,
-      deleteScreenshot,
-      getImagePreview,
-      processingHelper: state.processingHelper,
-      PROCESSING_EVENTS: state.PROCESSING_EVENTS,
-      takeScreenshot,
-      getView,
-      toggleMainWindow,
-      clearQueues,
-      setView,
-      moveWindowLeft: () =>
-        moveWindowHorizontal((x) =>
-          Math.max(-(state.windowSize?.width || 0) / 2, x - state.step)
-        ),
-      moveWindowRight: () =>
-        moveWindowHorizontal((x) =>
-          Math.min(
-            state.screenWidth - (state.windowSize?.width || 0) / 2,
-            x + state.step
-          )
-        ),
-      moveWindowUp: () => moveWindowVertical((y) => y - state.step),
-      moveWindowDown: () => moveWindowVertical((y) => y + state.step),
-    });
+initializeHelpers();
+initializeIpcHandlers({
+  getMainWindow,
+  setWindowDimensions,
+  getScreenshotQueue,
+  getExtraScreenshotQueue,
+  getScreenshotHelper,
+  deleteScreenshot,
+  getImagePreview,
+  processingHelper: state.processingHelper,
+  PROCESSING_EVENTS: state.PROCESSING_EVENTS,
+  takeScreenshot,
+  getView,
+  toggleMainWindow,
+  clearQueues,
+  setView,
+  moveWindowLeft: () =>
+    moveWindowHorizontal((x) =>
+      Math.max(-(state.windowSize?.width || 0) / 2, x - state.step)
+    ),
+  moveWindowRight: () =>
+    moveWindowHorizontal((x) =>
+      Math.min(
+        state.screenWidth - (state.windowSize?.width || 0) / 2,
+        x + state.step
+      )
+    ),
+  moveWindowUp: () => moveWindowVertical((y) => y - state.step),
+  moveWindowDown: () => moveWindowVertical((y) => y + state.step),
+});
     await createWindow();
     state.shortcutsHelper?.registerGlobalShortcuts();
 
@@ -656,12 +658,13 @@ function clearQueues(): void {
   setView("queue");
 }
 
-async function takeScreenshot(): Promise<string> {
+async function takeScreenshot(conversationId?: string): Promise<string> {
   if (!state.mainWindow) throw new Error("No main window available");
   return (
     state.screenshotHelper?.takeScreenshot(
       () => hideMainWindow(),
-      () => showMainWindow()
+      () => showMainWindow(),
+      conversationId
     ) || ""
   );
 }
@@ -669,12 +672,12 @@ async function takeScreenshot(): Promise<string> {
 async function getImagePreview(filepath: string): Promise<string> {
   return state.screenshotHelper?.getImagePreview(filepath) || "";
 }
-
 async function deleteScreenshot(
-  path: string
+  path: string,
+  conversationId?: string
 ): Promise<{ success: boolean; error?: string }> {
   return (
-    state.screenshotHelper?.deleteScreenshot(path) || {
+    state.screenshotHelper?.deleteScreenshot(path, conversationId) || {
       success: false,
       error: "Screenshot helper not initialized",
     }

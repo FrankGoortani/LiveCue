@@ -35,8 +35,8 @@ const electronAPI = {
     ipcRenderer.invoke("update-content-dimensions", dimensions),
   clearStore: () => ipcRenderer.invoke("clear-store"),
   getScreenshots: () => ipcRenderer.invoke("get-screenshots"),
-  deleteScreenshot: (path: string) =>
-    ipcRenderer.invoke("delete-screenshot", path),
+  deleteScreenshot: (path: string, conversationId?: string) =>
+    ipcRenderer.invoke("delete-screenshot", path, conversationId),
   toggleMainWindow: async () => {
     console.log("toggleMainWindow called from preload");
     try {
@@ -50,9 +50,9 @@ const electronAPI = {
   },
   // Event listeners
   onScreenshotTaken: (
-    callback: (data: { path: string; preview: string }) => void
+    callback: (data: { path: string; preview: string; conversationId?: string }) => void
   ) => {
-    const subscription = (_: any, data: { path: string; preview: string }) =>
+    const subscription = (_: any, data: { path: string; preview: string; conversationId?: string }) =>
       callback(data);
     ipcRenderer.on("screenshot-taken", subscription);
     return () => {
@@ -154,9 +154,9 @@ const electronAPI = {
   },
   // External URL handler
   openLink: (url: string) => shell.openExternal(url),
-  triggerScreenshot: () => ipcRenderer.invoke("trigger-screenshot"),
-  triggerProcessScreenshots: () =>
-    ipcRenderer.invoke("trigger-process-screenshots"),
+  triggerScreenshot: (conversationId?: string) => ipcRenderer.invoke("trigger-screenshot", conversationId),
+  triggerProcessScreenshots: (conversationId?: string, messages?: any[]) =>
+    ipcRenderer.invoke("trigger-process-screenshots", conversationId, messages),
   triggerReset: () => ipcRenderer.invoke("trigger-reset"),
   triggerMoveLeft: () => ipcRenderer.invoke("trigger-move-left"),
   triggerMoveRight: () => ipcRenderer.invoke("trigger-move-right"),
@@ -248,7 +248,33 @@ const electronAPI = {
       ipcRenderer.removeListener("delete-last-screenshot", subscription);
     };
   },
-  deleteLastScreenshot: () => ipcRenderer.invoke("delete-last-screenshot"),
+  deleteLastScreenshot: (conversationId?: string) => ipcRenderer.invoke("delete-last-screenshot", conversationId),
+
+  // Conversation handlers
+  createConversation: (conversation: any) => ipcRenderer.invoke("create-conversation", conversation),
+  updateConversation: (conversation: any) => ipcRenderer.invoke("update-conversation", conversation),
+  deleteConversation: (conversationId: string) => ipcRenderer.invoke("delete-conversation", conversationId),
+  setActiveConversation: (conversationId: string) => ipcRenderer.invoke("set-active-conversation", conversationId),
+
+  // Message handlers
+  addTextMessage: (message: any) => ipcRenderer.invoke("add-text-message", message),
+  updateTextMessage: (message: any) => ipcRenderer.invoke("update-text-message", message),
+  deleteTextMessage: (messageId: string, conversationId: string) =>
+    ipcRenderer.invoke("delete-text-message", messageId, conversationId),
+
+  // Screenshot specific to conversations
+  getConversationScreenshots: (conversationId: string) =>
+    ipcRenderer.invoke("get-conversation-screenshots", conversationId),
+  takeScreenshot: (conversationId: string) => ipcRenderer.invoke("take-screenshot", conversationId),
+
+  // Event handler for CMD+Enter shortcut
+  onCmdEnterTriggered: (callback: () => void) => {
+    const subscription = () => callback();
+    ipcRenderer.on("trigger-cmd-enter", subscription);
+    return () => {
+      ipcRenderer.removeListener("trigger-cmd-enter", subscription);
+    };
+  },
 };
 
 // Before exposing the API

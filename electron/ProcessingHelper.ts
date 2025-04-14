@@ -198,7 +198,7 @@ export class ProcessingHelper {
     }
   }
 
-  public async processScreenshots(): Promise<void> {
+  public async processScreenshots(conversationId?: string, messages?: any[]): Promise<void> {
     const mainWindow = this.deps.getMainWindow();
     if (!mainWindow) return;
 
@@ -246,19 +246,17 @@ export class ProcessingHelper {
       const screenshotQueue = this.screenshotHelper.getScreenshotQueue();
       console.log("Processing main queue screenshots:", screenshotQueue);
 
-      // Check if the queue is empty
-      if (!screenshotQueue || screenshotQueue.length === 0) {
-        console.log("No screenshots found in queue");
-        mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
-        return;
-      }
+      // Get any existing screenshots
+      const existingScreenshots = screenshotQueue
+        ? screenshotQueue.filter((path) => fs.existsSync(path))
+        : [];
 
-      // Check that files actually exist
-      const existingScreenshots = screenshotQueue.filter((path) =>
-        fs.existsSync(path)
-      );
-      if (existingScreenshots.length === 0) {
-        console.log("Screenshot files don't exist on disk");
+      // Check if we have messages to process
+      const hasMessages = Array.isArray(messages) && messages.length > 0;
+
+      // If we have no screenshots and no messages, notify the user
+      if (existingScreenshots.length === 0 && !hasMessages) {
+        console.log("No screenshots or messages found");
         mainWindow.webContents.send(this.deps.PROCESSING_EVENTS.NO_SCREENSHOTS);
         return;
       }
@@ -268,7 +266,8 @@ export class ProcessingHelper {
         this.currentProcessingAbortController = new AbortController();
         const { signal } = this.currentProcessingAbortController;
 
-        const screenshots = await Promise.all(
+        // Only process screenshots if they exist
+        const screenshots = existingScreenshots.length > 0 ? await Promise.all(
           existingScreenshots.map(async (path) => {
             try {
               return {
@@ -281,18 +280,24 @@ export class ProcessingHelper {
               return null;
             }
           })
-        );
+        ) : [];
 
         // Filter out any nulls from failed screenshots
-        const validScreenshots = screenshots.filter(Boolean);
+        const validScreenshots = screenshots ? screenshots.filter(Boolean) : [];
 
-        if (validScreenshots.length === 0) {
-          throw new Error("Failed to load screenshot data");
+        // Check if we have conversation messages to include in the prompt
+        const hasMessages = Array.isArray(messages) && messages.length > 0;
+
+        // Only require valid screenshots if there are no messages
+        if (validScreenshots.length === 0 && !hasMessages) {
+          throw new Error("Failed to load screenshot data and no messages available");
         }
 
         const result = await this.processScreenshotsHelper(
           validScreenshots,
-          signal
+          signal,
+          conversationId,
+          messages
         );
 
         if (!result.success) {
@@ -418,7 +423,8 @@ export class ProcessingHelper {
 
         const result = await this.processExtraScreenshotsHelper(
           validScreenshots,
-          signal
+          signal,
+          conversationId
         );
 
         if (result.success) {
@@ -453,7 +459,9 @@ export class ProcessingHelper {
 
   private async processScreenshotsHelper(
     screenshots: Array<{ path: string; data: string }>,
-    signal: AbortSignal
+    signal: AbortSignal,
+    conversationId?: string,
+    messages?: any[]
   ) {
     try {
       const config = configHelper.loadConfig();
@@ -487,24 +495,48 @@ export class ProcessingHelper {
           }
         }
 
+        // Extract conversation context from messages if available
+        let conversationContext = "";
+        const hasConversationMessages = Array.isArray(messages) && messages.length > 0;
+
+        if (hasConversationMessages) {
+          // Get the last 20 messages at most
+          const recentMessages = messages.slice(-20);
+
+          // Format the conversation messages
+          conversationContext = recentMessages.map(msg => {
+            if (msg.type === 'text') {
+              return `User: ${(msg as any).content}`;
+            } else if (msg.type === 'solution') {
+              return `Assistant: Generated solution in ${(msg as any).language || language}`;
+            }
+            return "";
+          }).filter(text => text.length > 0).join("\n\n");
+
+          // Add a heading if we have conversation context
+          if (conversationContext) {
+            conversationContext = `\n\nRECENT CONVERSATION CONTEXT:\n${conversationContext}\n\n`;
+          }
+        }
+
         // Use OpenAI for processing
-        const messages = [
+        const openaiMessages = [
           {
             role: "system" as const,
             content:
               "You are a coding challenge interpreter. Follow these steps: 1- Review everything in the screenshot. 2- Find the problem in the screenshot we want to solve. 3- Follow the pattern and language requested in the screenshot; if language is not clear, use the preferred language provided. 4- Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, language. Just return the structured JSON without any other text.",
-        },
+          },
         {
           role: "user" as const,
           content: [
             {
               type: "text" as const,
-              text: `Review these screenshots carefully. Find the problem we need to solve. First, look for any language explicitly mentioned in the screenshot and use that. Only if no language is specified in the screenshot, fall back to ${language}. Return in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).`,
+              text: `Review these screenshots carefully. Find the problem we need to solve. First, look for any language explicitly mentioned in the screenshot and use that. Only if no language is specified in the screenshot, fall back to ${language}.${conversationContext} Return in JSON format with these fields: problem_statement, constraints, example_input, example_output, language (include the programming language you identified or the fallback).`,
               },
-              ...imageDataList.map((data) => ({
+              ...(imageDataList.length > 0 ? imageDataList.map((data) => ({
                 type: "image_url" as const,
                 image_url: { url: `data:image/png;base64,${data}` },
-              })),
+              })) : []),
             ],
           },
         ];
@@ -513,7 +545,7 @@ export class ProcessingHelper {
         const extractionResponse =
           await this.openaiClient.chat.completions.create({
             model: config.extractionModel || "gpt-4o",
-            messages: messages,
+            messages: openaiMessages,
             max_tokens: 4000,
             temperature: 0.2,
           });
@@ -523,7 +555,25 @@ export class ProcessingHelper {
           const responseText = extractionResponse.choices[0].message.content;
           // Handle when OpenAI might wrap the JSON in markdown code blocks
           const jsonText = responseText.replace(/```json|```/g, "").trim();
-          problemInfo = JSON.parse(jsonText);
+
+          // Check if the response looks like an error message rather than JSON
+          if (jsonText.startsWith("I'm sorry") || !jsonText.includes("{")) {
+            throw new Error("OpenAI returned an error message instead of JSON: " + jsonText);
+          }
+
+          try {
+            problemInfo = JSON.parse(jsonText);
+          } catch (parseError) {
+            // If JSON parsing fails, create a structured response with the text content
+            console.log("Could not parse response as JSON, creating structured response", parseError);
+            problemInfo = {
+              problem_statement: responseText,
+              constraints: "No specific constraints provided",
+              example_input: "No example input provided",
+              example_output: "No example output provided",
+              language: language
+            };
+          }
         } catch (error) {
           console.error("Error parsing OpenAI response:", error);
           return {
@@ -680,6 +730,11 @@ export class ProcessingHelper {
       // Store problem info in AppState
       this.deps.setProblemInfo(problemInfo);
 
+      // Include conversation ID if provided
+      if (conversationId) {
+        problemInfo.conversationId = conversationId;
+      }
+
       // Send first success event
       if (mainWindow) {
         mainWindow.webContents.send(
@@ -688,7 +743,7 @@ export class ProcessingHelper {
         );
 
         // Generate solutions after successful extraction
-        const solutionsResult = await this.generateSolutionsHelper(signal);
+        const solutionsResult = await this.generateSolutionsHelper(signal, conversationId);
         if (solutionsResult.success) {
           // Clear any existing extra screenshots before transitioning to solutions view
           this.screenshotHelper.clearExtraScreenshotQueue();
@@ -749,7 +804,7 @@ export class ProcessingHelper {
     }
   }
 
-  private async generateSolutionsHelper(signal: AbortSignal) {
+  private async generateSolutionsHelper(signal: AbortSignal, conversationId?: string) {
     try {
       const problemInfo = this.deps.getProblemInfo();
       const defaultLanguage = await this.getLanguage();
@@ -1134,6 +1189,7 @@ Example steps could include:
             : ["Solution approach based on efficiency and readability"],
         time_complexity: timeComplexity,
         space_complexity: spaceComplexity,
+        conversationId: conversationId,
         steps: steps
       };
 
@@ -1169,7 +1225,8 @@ Example steps could include:
 
   private async processExtraScreenshotsHelper(
     screenshots: Array<{ path: string; data: string }>,
-    signal: AbortSignal
+    signal: AbortSignal,
+    conversationId?: string
   ) {
     try {
       const problemInfo = this.deps.getProblemInfo();
@@ -1496,6 +1553,7 @@ If you include code examples, use proper markdown code blocks with language spec
         thoughts: thoughts,
         time_complexity: "N/A - Debug mode",
         space_complexity: "N/A - Debug mode",
+        conversationId: conversationId,
       };
 
       return { success: true, data: response };

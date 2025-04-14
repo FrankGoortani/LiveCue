@@ -12,6 +12,8 @@ import StepNavigation from "../components/Solutions/StepNavigation";
 import StepContent from "../components/Solutions/StepContent";
 import Debug from "./Debug";
 import { useToast } from "../contexts/toast";
+import { useConversations } from "../contexts/conversations";
+import { MessageType, SolutionMessage } from "../types/conversations";
 import { COMMAND_KEY } from "../utils/platform";
 
 export const ContentSection = ({
@@ -241,6 +243,7 @@ const Solutions: React.FC<SolutionsProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const contentRef = useRef<HTMLDivElement>(null);
+  const { activeConversation, addSolutionMessage } = useConversations();
 
   const [debugProcessing, setDebugProcessing] = useState(false);
   const [problemStatementData, setProblemStatementData] =
@@ -272,18 +275,32 @@ const Solutions: React.FC<SolutionsProps> = ({
   useEffect(() => {
     const fetchScreenshots = async () => {
       try {
-        const existing = await window.electronAPI.getScreenshots();
-        console.log("Raw screenshot data:", existing);
-        const screenshots = (Array.isArray(existing) ? existing : []).map(
-          (p) => ({
-            id: p.path,
-            path: p.path,
-            preview: p.preview,
-            timestamp: Date.now(),
-          })
-        );
-        console.log("Processed screenshots:", screenshots);
-        setExtraScreenshots(screenshots);
+        // If there's an active conversation, get screenshots from it
+        if (activeConversation && activeConversation.id) {
+          const result = await window.electronAPI.getConversationScreenshots(activeConversation.id);
+          if (result.success && result.data) {
+            const screenshots = result.data.map((p: any) => ({
+              id: p.path,
+              path: p.path,
+              preview: p.preview,
+              timestamp: Date.now(),
+            }));
+            console.log("Conversation screenshots:", screenshots);
+            setExtraScreenshots(screenshots);
+          } else {
+            // Fallback to regular screenshots if needed
+            const existing = await window.electronAPI.getScreenshots();
+            const screenshots = (Array.isArray(existing) ? existing : []).map(
+              (p) => ({
+                id: p.path,
+                path: p.path,
+                preview: p.preview,
+                timestamp: Date.now(),
+              })
+            );
+            setExtraScreenshots(screenshots);
+          }
+        }
       } catch (error) {
         console.error("Error loading extra screenshots:", error);
         setExtraScreenshots([]);
@@ -291,7 +308,7 @@ const Solutions: React.FC<SolutionsProps> = ({
     };
 
     fetchScreenshots();
-  }, [solutionData]);
+  }, [activeConversation, solutionData]);
 
   const { showToast } = useToast();
 
@@ -320,18 +337,33 @@ const Solutions: React.FC<SolutionsProps> = ({
 
     // Set up event listeners
     const cleanupFunctions = [
-      window.electronAPI.onScreenshotTaken(async () => {
+      window.electronAPI.onScreenshotTaken(async (data: { path: string; preview: string; conversationId?: string }) => {
         try {
-          const existing = await window.electronAPI.getScreenshots();
-          const screenshots = (Array.isArray(existing) ? existing : []).map(
-            (p) => ({
-              id: p.path,
-              path: p.path,
-              preview: p.preview,
-              timestamp: Date.now(),
-            })
-          );
-          setExtraScreenshots(screenshots);
+          // If this screenshot is for our active conversation, update the list
+          if (data.conversationId && activeConversation && data.conversationId === activeConversation.id) {
+            const result = await window.electronAPI.getConversationScreenshots(activeConversation.id);
+            if (result.success && result.data) {
+              const screenshots = result.data.map((p: any) => ({
+                id: p.path,
+                path: p.path,
+                preview: p.preview,
+                timestamp: Date.now(),
+              }));
+              setExtraScreenshots(screenshots);
+            }
+          } else {
+            // Fallback to the old behavior
+            const existing = await window.electronAPI.getScreenshots();
+            const screenshots = (Array.isArray(existing) ? existing : []).map(
+              (p) => ({
+                id: p.path,
+                path: p.path,
+                preview: p.preview,
+                timestamp: Date.now(),
+              })
+            );
+            setExtraScreenshots(screenshots);
+          }
         } catch (error) {
           console.error("Error loading extra screenshots:", error);
         }
@@ -429,6 +461,18 @@ const Solutions: React.FC<SolutionsProps> = ({
           ];
         }
 
+        // Add the solution to the active conversation
+        if (activeConversation) {
+          addSolutionMessage(activeConversation.id, {
+            code: data.code,
+            thoughts: data.thoughts,
+            time_complexity: data.time_complexity,
+            space_complexity: data.space_complexity,
+            steps: steps,
+            problem_statement: queryClient.getQueryData(["problem_statement"])
+          });
+        }
+
         const solutionData = {
           code: data.code,
           thoughts: data.thoughts,
@@ -499,7 +543,7 @@ const Solutions: React.FC<SolutionsProps> = ({
       resizeObserver.disconnect();
       cleanupFunctions.forEach((cleanup) => cleanup());
     };
-  }, [isTooltipVisible, tooltipHeight]);
+  }, [isTooltipVisible, tooltipHeight, activeConversation, addSolutionMessage]);
 
   useEffect(() => {
     setProblemStatementData(
@@ -541,22 +585,40 @@ const Solutions: React.FC<SolutionsProps> = ({
     const screenshotToDelete = extraScreenshots[index];
 
     try {
+      // If we have an active conversation, include its ID when deleting
+      const conversationId = activeConversation ? activeConversation.id : undefined;
+
       const response = await window.electronAPI.deleteScreenshot(
-        screenshotToDelete.path
+        screenshotToDelete.path,
+        conversationId
       );
 
       if (response.success) {
-        // Fetch and update screenshots after successful deletion
-        const existing = await window.electronAPI.getScreenshots();
-        const screenshots = (Array.isArray(existing) ? existing : []).map(
-          (p: { path: string; preview: string }) => ({
-            id: p.path,
-            path: p.path,
-            preview: p.preview,
-            timestamp: Date.now(),
-          })
-        );
-        setExtraScreenshots(screenshots);
+        // Fetch screenshots for the active conversation
+        if (conversationId) {
+          const result = await window.electronAPI.getConversationScreenshots(conversationId);
+          if (result.success && result.data) {
+            const screenshots = result.data.map((p: any) => ({
+              id: p.path,
+              path: p.path,
+              preview: p.preview,
+              timestamp: Date.now(),
+            }));
+            setExtraScreenshots(screenshots);
+          }
+        } else {
+          // Fallback to the old behavior
+          const existing = await window.electronAPI.getScreenshots();
+          const screenshots = (Array.isArray(existing) ? existing : []).map(
+            (p: { path: string; preview: string }) => ({
+              id: p.path,
+              path: p.path,
+              preview: p.preview,
+              timestamp: Date.now(),
+            })
+          );
+          setExtraScreenshots(screenshots);
+        }
       } else {
         console.error("Failed to delete extra screenshot:", response.error);
         showToast("Error", "Failed to delete the screenshot", "error");

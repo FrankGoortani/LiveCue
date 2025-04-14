@@ -8,6 +8,58 @@ import { configHelper } from "./ConfigHelper";
 export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   console.log("Initializing IPC handlers");
 
+  // Conversation management handlers
+  ipcMain.handle("create-conversation", (_event, conversation) => {
+    try {
+      // The frontend sends a fully-formed conversation object
+      // We just need to notify the frontend that it was created
+      return { success: true, data: conversation };
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+      return { success: false, error: "Failed to create conversation" };
+    }
+  });
+
+  ipcMain.handle("update-conversation", (_event, conversation) => {
+    try {
+      // The frontend sends the updated conversation object
+      // We just need to notify the frontend that it was updated
+      return { success: true, data: conversation };
+    } catch (error) {
+      console.error("Error updating conversation:", error);
+      return { success: false, error: "Failed to update conversation" };
+    }
+  });
+
+  ipcMain.handle("delete-conversation", (_event, conversationId) => {
+    try {
+      // Delete any screenshots associated with this conversation
+      const screenshotHelper = deps.getScreenshotHelper();
+      const screenshots = screenshotHelper?.getConversationScreenshots(conversationId) || [];
+
+      // Delete each screenshot file
+      for (const screenshotPath of screenshots) {
+        deps.deleteScreenshot(screenshotPath, conversationId);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+      return { success: false, error: "Failed to delete conversation" };
+    }
+  });
+
+  ipcMain.handle("set-active-conversation", (_event, conversationId) => {
+    try {
+      // This is mostly handled in the frontend, but we might need this
+      // for future backend operations
+      return { success: true, data: conversationId };
+    } catch (error) {
+      console.error("Error setting active conversation:", error);
+      return { success: false, error: "Failed to set active conversation" };
+    }
+  });
+
   // Configuration handlers
   ipcMain.handle("get-config", () => {
     return configHelper.loadConfig();
@@ -81,8 +133,8 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     return deps.getExtraScreenshotQueue();
   });
 
-  ipcMain.handle("delete-screenshot", async (event, path: string) => {
-    return deps.deleteScreenshot(path);
+  ipcMain.handle("delete-screenshot", async (event, path: string, conversationId?: string) => {
+    return deps.deleteScreenshot(path, conversationId);
   });
 
   ipcMain.handle("get-image-preview", async (event, path: string) => {
@@ -152,15 +204,16 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   });
 
   // Screenshot trigger handlers
-  ipcMain.handle("trigger-screenshot", async () => {
+  ipcMain.handle("trigger-screenshot", async (_event, conversationId) => {
     const mainWindow = deps.getMainWindow();
     if (mainWindow) {
       try {
-        const screenshotPath = await deps.takeScreenshot();
+        const screenshotPath = await deps.takeScreenshot(conversationId);
         const preview = await deps.getImagePreview(screenshotPath);
         mainWindow.webContents.send("screenshot-taken", {
           path: screenshotPath,
           preview,
+          conversationId,
         });
         return { success: true };
       } catch (error) {
@@ -171,19 +224,76 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     return { error: "No main window available" };
   });
 
-  ipcMain.handle("take-screenshot", async () => {
+  ipcMain.handle("take-screenshot", async (_event, conversationId) => {
     try {
-      const screenshotPath = await deps.takeScreenshot();
+      const screenshotPath = await deps.takeScreenshot(conversationId);
       const preview = await deps.getImagePreview(screenshotPath);
-      return { path: screenshotPath, preview };
+      return {
+        path: screenshotPath,
+        preview,
+        conversationId
+      };
     } catch (error) {
       console.error("Error taking screenshot:", error);
       return { error: "Failed to take screenshot" };
     }
   });
 
-  // Auth-related handlers removed
+  // Text message handlers
+  ipcMain.handle("add-text-message", (_event, message) => {
+    try {
+      // This is just a pass-through, as text messages are managed in the frontend
+      return { success: true, data: message };
+    } catch (error) {
+      console.error("Error adding text message:", error);
+      return { success: false, error: "Failed to add text message" };
+    }
+  });
 
+  ipcMain.handle("update-text-message", (_event, message) => {
+    try {
+      // This is just a pass-through, as text messages are managed in the frontend
+      return { success: true, data: message };
+    } catch (error) {
+      console.error("Error updating text message:", error);
+      return { success: false, error: "Failed to update text message" };
+    }
+  });
+
+  ipcMain.handle("delete-text-message", (_event, messageId, conversationId) => {
+    try {
+      // This is just a pass-through, as text messages are managed in the frontend
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting text message:", error);
+      return { success: false, error: "Failed to delete text message" };
+    }
+  });
+
+  // Process screenshot handlers
+  ipcMain.handle("trigger-process-screenshots", async (_event, conversationId, messages) => {
+    try {
+      // Check for API key before processing
+      if (!configHelper.hasApiKey()) {
+        const mainWindow = deps.getMainWindow();
+        if (mainWindow) {
+          mainWindow.webContents.send(deps.PROCESSING_EVENTS.API_KEY_INVALID);
+        }
+        return { success: false, error: "API key required" };
+      }
+
+      // Check if we have messages and proceed even without screenshots
+      const hasMessages = Array.isArray(messages) && messages.length > 0;
+
+      await deps.processingHelper?.processScreenshots(conversationId, messages);
+      return { success: true };
+    } catch (error) {
+      console.error("Error processing screenshots:", error);
+      return { error: "Failed to process screenshots" };
+    }
+  });
+
+  // Open external URL handler
   ipcMain.handle("open-external-url", (event, url: string) => {
     shell.openExternal(url);
   });
@@ -228,26 +338,6 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     } catch (error) {
       console.error("Error resetting queues:", error);
       return { error: "Failed to reset queues" };
-    }
-  });
-
-  // Process screenshot handlers
-  ipcMain.handle("trigger-process-screenshots", async () => {
-    try {
-      // Check for API key before processing
-      if (!configHelper.hasApiKey()) {
-        const mainWindow = deps.getMainWindow();
-        if (mainWindow) {
-          mainWindow.webContents.send(deps.PROCESSING_EVENTS.API_KEY_INVALID);
-        }
-        return { success: false, error: "API key required" };
-      }
-
-      await deps.processingHelper?.processScreenshots();
-      return { success: true };
-    } catch (error) {
-      console.error("Error processing screenshots:", error);
-      return { error: "Failed to process screenshots" };
     }
   });
 
@@ -320,28 +410,45 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   });
 
   // Delete last screenshot handler
-  ipcMain.handle("delete-last-screenshot", async () => {
+  ipcMain.handle("delete-last-screenshot", async (_event, conversationId) => {
     try {
-      const queue =
-        deps.getView() === "queue"
-          ? deps.getScreenshotQueue()
-          : deps.getExtraScreenshotQueue();
+      let screenshot;
 
-      if (queue.length === 0) {
-        return { success: false, error: "No screenshots to delete" };
+      if (conversationId) {
+        // Get the screenshots for this conversation
+        const screenshotHelper = deps.getScreenshotHelper();
+        const screenshots = screenshotHelper?.getConversationScreenshots(conversationId) || [];
+
+        if (screenshots.length === 0) {
+          return { success: false, error: "No screenshots in this conversation" };
+        }
+
+        // Get the last screenshot
+        screenshot = screenshots[screenshots.length - 1];
+      } else {
+        // Use the original queue-based logic for backwards compatibility
+        const queue =
+          deps.getView() === "queue"
+            ? deps.getScreenshotQueue()
+            : deps.getExtraScreenshotQueue();
+
+        if (queue.length === 0) {
+          return { success: false, error: "No screenshots to delete" };
+        }
+
+        // Get the last screenshot in the queue
+        screenshot = queue[queue.length - 1];
       }
 
-      // Get the last screenshot in the queue
-      const lastScreenshot = queue[queue.length - 1];
-
-      // Delete it
-      const result = await deps.deleteScreenshot(lastScreenshot);
+      // Delete the screenshot
+      const result = await deps.deleteScreenshot(screenshot, conversationId);
 
       // Notify the renderer about the change
       const mainWindow = deps.getMainWindow();
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("screenshot-deleted", {
-          path: lastScreenshot,
+          path: screenshot,
+          conversationId
         });
       }
 
@@ -349,6 +456,31 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     } catch (error) {
       console.error("Error deleting last screenshot:", error);
       return { success: false, error: "Failed to delete last screenshot" };
+    }
+  });
+
+  // Get conversation screenshots handler
+  ipcMain.handle("get-conversation-screenshots", async (_event, conversationId) => {
+    try {
+      if (!conversationId) {
+        return { success: false, error: "No conversation ID provided" };
+      }
+
+      const screenshotHelper = deps.getScreenshotHelper();
+      const screenshots = screenshotHelper?.getConversationScreenshots(conversationId) || [];
+
+      const previews = await Promise.all(
+        screenshots.map(async (path) => ({
+          path,
+          preview: await deps.getImagePreview(path),
+          conversationId
+        }))
+      );
+
+      return { success: true, data: previews };
+    } catch (error) {
+      console.error("Error getting conversation screenshots:", error);
+      return { success: false, error: "Failed to get conversation screenshots" };
     }
   });
 }
