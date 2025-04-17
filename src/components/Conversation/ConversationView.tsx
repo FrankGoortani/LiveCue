@@ -22,7 +22,8 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     activeConversation,
     activeConversationId,
     createConversation,
-    setActiveConversation
+    setActiveConversation,
+    resetConversation
   } = useConversations();
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -46,6 +47,16 @@ const ConversationView: React.FC<ConversationViewProps> = ({
     const unsubscribe = window.electronAPI.onCmdEnterTriggered(handleCmdEnter);
     return () => unsubscribe();
   }, [handleCmdEnter]);
+
+  // Listen for reset shortcut event to clear current conversation
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onReset(() => {
+      if (activeConversationId) {
+        resetConversation(activeConversationId);
+      }
+    });
+    return unsubscribe;
+  }, [activeConversationId, resetConversation]);
 
   // Create a default conversation if none exists
   useEffect(() => {

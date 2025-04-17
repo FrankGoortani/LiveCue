@@ -38,6 +38,7 @@ export interface ElectronAPI {
     error?: string;
   }>;
   onCmdEnterTriggered: (callback: () => void) => () => void;
+  onReset: (callback: () => void) => () => void;
   triggerReset: () => Promise<{ success: boolean; error?: string }>;
   triggerMoveLeft: () => Promise<{ success: boolean; error?: string }>;
   triggerMoveRight: () => Promise<{ success: boolean; error?: string }>;
