@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Message, MessageType, TextMessage, ScreenshotMessage, SolutionMessage } from "../../types/conversations";
 import { useConversations } from "../../contexts/conversations";
 
@@ -7,7 +7,7 @@ interface MessageItemProps {
   conversationId: string;
 }
 
-const MessageItem: React.FC<MessageItemProps> = ({ message, conversationId }) => {
+const MessageItem = memo(({ message, conversationId }: MessageItemProps) => {
   // Render based on message type
   switch (message.type) {
     case MessageType.SCREENSHOT:
@@ -19,7 +19,7 @@ const MessageItem: React.FC<MessageItemProps> = ({ message, conversationId }) =>
     default:
       return <div>Unknown message type</div>;
   }
-};
+});
 
 interface TypedMessageItemProps<T extends Message> {
   message: T;
@@ -27,7 +27,7 @@ interface TypedMessageItemProps<T extends Message> {
 }
 
 // Screenshot message component
-const ScreenshotMessageItem: React.FC<TypedMessageItemProps<ScreenshotMessage>> = ({ message, conversationId }) => {
+const ScreenshotMessageItem = memo(({ message, conversationId }: TypedMessageItemProps<ScreenshotMessage>) => {
   const { deleteMessage } = useConversations();
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
 
@@ -88,10 +88,10 @@ const ScreenshotMessageItem: React.FC<TypedMessageItemProps<ScreenshotMessage>> 
       </div>
     </div>
   );
-};
+});
 
 // Text message component
-const TextMessageItem: React.FC<TypedMessageItemProps<TextMessage>> = ({ message, conversationId }) => {
+const TextMessageItem = memo(({ message, conversationId }: TypedMessageItemProps<TextMessage>) => {
   return (
     <div className="rounded-lg bg-black/70 border border-gray-700 shadow-sm my-2 p-3">
       <div className="flex justify-between items-center mb-1">
@@ -104,10 +104,10 @@ const TextMessageItem: React.FC<TypedMessageItemProps<TextMessage>> = ({ message
       </div>
     </div>
   );
-};
+});
 
 // Solution message component
-const SolutionMessageItem: React.FC<TypedMessageItemProps<SolutionMessage>> = ({ message }) => {
+const SolutionMessageItem = memo(({ message }: TypedMessageItemProps<SolutionMessage>) => {
   return (
     <div className="rounded-lg bg-black/70 border border-gray-700 shadow-sm my-2 p-3">
       <div className="flex justify-between items-center mb-1">
@@ -126,6 +126,6 @@ const SolutionMessageItem: React.FC<TypedMessageItemProps<SolutionMessage>> = ({
       </div>
     </div>
   );
-};
+});
 
 export default MessageItem;

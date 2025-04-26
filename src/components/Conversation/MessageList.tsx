@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, memo } from "react";
 import MessageItem from "./MessageItem";
 import { Message } from "../../types/conversations";
 
@@ -7,12 +7,12 @@ interface MessageListProps {
   conversationId: string;
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, conversationId }) => {
+const MessageList = memo(({ messages, conversationId }: MessageListProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages are added
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
   }, [messages]);
 
   // Handle empty state
@@ -37,6 +37,6 @@ const MessageList: React.FC<MessageListProps> = ({ messages, conversationId }) =
       <div ref={messagesEndRef} />
     </div>
   );
-};
+});
 
 export default MessageList;

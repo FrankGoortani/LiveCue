@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useToast } from "../../contexts/toast";
 import { Screenshot } from "../../types/screenshots";
 import { supabase } from "../../lib/supabase";
@@ -41,15 +41,7 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
-  useEffect(() => {
-    if (onTooltipVisibilityChange) {
-      let tooltipHeight = 0;
-      if (tooltipRef.current && isTooltipVisible) {
-        tooltipHeight = tooltipRef.current.offsetHeight + 10; // Adjust if necessary
-      }
-      onTooltipVisibilityChange(isTooltipVisible, tooltipHeight);
-    }
-  }, [isTooltipVisible, onTooltipVisibilityChange]);
+
 
   const handleMouseEnter = () => {
     setIsTooltipVisible(true);
@@ -59,9 +51,22 @@ const SolutionCommands: React.FC<SolutionCommandsProps> = ({
     setIsTooltipVisible(false);
   };
 
+  // Use ResizeObserver instead of manual throttle for tooltip height updates
+  useEffect(() => {
+    if (!tooltipRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const height = entry.contentRect.height + 10;
+        onTooltipVisibilityChange(isTooltipVisible, height);
+      }
+    });
+    if (isTooltipVisible) observer.observe(tooltipRef.current);
+    return () => observer.disconnect();
+  }, [isTooltipVisible, onTooltipVisibilityChange]);
+
   return (
-    <div>
-      <div className="pt-2 w-fit">
+    <div className="w-[1000px] h-full flex flex-col ">
+      <div className="pt-2 w-full">
         <div className="text-xs text-white/90 backdrop-blur-md bg-black/60 rounded-lg py-2 px-4 flex items-center justify-center gap-4">
           {/* Show/Hide - Always visible */}
           <div

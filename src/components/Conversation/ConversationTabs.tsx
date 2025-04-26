@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { useConversations } from "../../contexts/conversations";
 
 const ConversationTabs: React.FC = () => {
@@ -82,4 +82,4 @@ const ConversationTabs: React.FC = () => {
   );
 };
 
-export default ConversationTabs;
+export default memo(ConversationTabs);

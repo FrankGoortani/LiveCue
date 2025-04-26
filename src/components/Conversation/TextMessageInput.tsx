@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, memo } from "react";
 import { useConversations } from "../../contexts/conversations";
 import { LanguageSelector } from "../shared/LanguageSelector";
 
@@ -16,14 +16,14 @@ const TextMessageInput: React.FC<TextMessageInputProps> = ({
   const [message, setMessage] = useState("");
   const { addTextMessage } = useConversations();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
     if (message.trim()) {
       addTextMessage(conversationId, message);
       setMessage("");
     }
-  };
+  }, [addTextMessage, conversationId, message]);
 
   return (
     <div className="mt-4">
@@ -40,15 +40,15 @@ const TextMessageInput: React.FC<TextMessageInputProps> = ({
         <div className="flex space-x-2">
           <textarea
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type your message here..."
+           onChange={useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value), [])}
+           placeholder="Type your message here..."
             className="flex-1 p-2 border border-gray-700 rounded-md min-h-[80px] text-sm text-white bg-black/70 focus:outline-none focus:ring-2 focus:ring-gray-600"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
+           onKeyDown={useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+             if (e.key === 'Enter' && !e.shiftKey) {
+               e.preventDefault();
+               handleSubmit(e);
+             }
+           }, [handleSubmit])}
           />
 
           <button
@@ -68,4 +68,4 @@ const TextMessageInput: React.FC<TextMessageInputProps> = ({
   );
 };
 
-export default TextMessageInput;
+export default memo(TextMessageInput);

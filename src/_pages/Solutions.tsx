@@ -673,14 +673,14 @@ const Solutions: React.FC<SolutionsProps> = ({
 
   return (
     <>
-      {!isResetting && queryClient.getQueryData(["new_solution"]) ? (
+      {/* {!isResetting && queryClient.getQueryData(["new_solution"]) ? (
         <Debug
           isProcessing={debugProcessing}
           setIsProcessing={setDebugProcessing}
           currentLanguage={currentLanguage}
           setLanguage={setLanguage}
         />
-      ) : (
+      ) : ( */}
         <div ref={contentRef} className="relative">
           <div className="space-y-3 px-4 py-3">
             {/* Conditionally render the screenshot queue if solutionData is available */}
@@ -773,7 +773,7 @@ const Solutions: React.FC<SolutionsProps> = ({
             </div>
           </div>
         </div>
-      )}
+      {/* )} */}
     </>
   );
 };

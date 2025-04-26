@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, memo } from "react";
 import { useConversations } from "../../contexts/conversations";
 import ConversationTabs from "./ConversationTabs";
 import MessageList from "./MessageList";
@@ -27,6 +27,13 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   } = useConversations();
 
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Compute and send content dimensions
+  const updateDimensions = useCallback(() => {
+    if (!contentRef.current) return;
+    const { scrollWidth: width, scrollHeight: height } = contentRef.current;
+    window.electronAPI.updateContentDimensions({ width, height });
+  }, []);
 
   // Function to handle CMD+Enter shortcut
   const handleCmdEnter = useCallback(() => {
@@ -71,32 +78,18 @@ const ConversationView: React.FC<ConversationViewProps> = ({
 
   // Handle window resizing to update electron window dimensions
   useEffect(() => {
-    const updateDimensions = () => {
-      if (contentRef.current) {
-        const contentHeight = contentRef.current.scrollHeight;
-        const contentWidth = contentRef.current.scrollWidth;
-
-        window.electronAPI.updateContentDimensions({
-          width: contentWidth,
-          height: contentHeight,
-        });
-      }
-    };
-
-    // Initialize resize observer
     const resizeObserver = new ResizeObserver(updateDimensions);
     if (contentRef.current) {
       resizeObserver.observe(contentRef.current);
     }
-    updateDimensions();
-
+    updateDimensions(); // Initial call
     return () => {
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [updateDimensions]);
 
   return (
-    <div ref={contentRef} className="bg-transparent flex flex-col h-full">
+    <div ref={contentRef} className="bg-transparent flex flex-col h-full w-[1000px]">
       <div className="px-4 py-3 flex flex-col h-full">
         <div className="flex flex-col w-full h-full">
           <div className="mb-3">
@@ -104,7 +97,7 @@ const ConversationView: React.FC<ConversationViewProps> = ({
           </div>
 
           {activeConversation && (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col w-full h-full">
               <div className="flex-grow overflow-hidden">
                 <MessageList
                   messages={activeConversation.messages}
@@ -127,4 +120,4 @@ const ConversationView: React.FC<ConversationViewProps> = ({
   );
 };
 
-export default ConversationView;
+export default memo(ConversationView);

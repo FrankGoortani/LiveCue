@@ -141,7 +141,7 @@ const Queue: React.FC<QueueProps> = ({
   };
 
   return (
-    <div ref={contentRef} className={`bg-transparent w-1/2`}>
+    <div ref={contentRef} className={`bg-transparent w-[1000px]`}>
       <div className="px-4 py-3">
         <div className="space-y-3 w-fit">
           <ScreenshotQueue

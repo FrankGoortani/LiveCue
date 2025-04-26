@@ -3,6 +3,7 @@
   "version": "1.0.19",
   "main": "./dist-electron/main.js",
   "scripts": {
+    "postinstall": "npm rebuild electron --update-binary",
     "clean": "npx rimraf dist dist-electron",
     "dev": "cross-env NODE_ENV=development npm run clean && concurrently \"tsc -w -p tsconfig.electron.json\" \"vite\" \"wait-on -t 30000 http://localhost:54321 && electron ./dist-electron/main.js\"",
     "test": "echo \"No tests defined. Please contribute if you like\" && exit 0",
