@@ -1,6 +1,7 @@
 import React, { useState, useCallback, memo } from "react";
 import { useConversations } from "../../contexts/conversations";
 import { LanguageSelector } from "../shared/LanguageSelector";
+import TranscriptButton from "./TranscriptButton";
 
 interface TextMessageInputProps {
   conversationId: string;
@@ -30,10 +31,13 @@ const TextMessageInput: React.FC<TextMessageInputProps> = ({
       <form onSubmit={handleSubmit} className="flex flex-col space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <LanguageSelector
-              currentLanguage={currentLanguage}
-              setLanguage={setLanguage}
-            />
+            <div className="flex items-center space-x-2">
+              <LanguageSelector
+                currentLanguage={currentLanguage}
+                setLanguage={setLanguage}
+              />
+              <TranscriptButton conversationId={conversationId} />
+            </div>
           </div>
         </div>
 

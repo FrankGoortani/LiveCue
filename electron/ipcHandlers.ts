@@ -4,6 +4,7 @@ import { ipcMain, shell, dialog } from "electron";
 import { randomBytes } from "crypto";
 import { IIpcHandlerDeps } from "./main";
 import { configHelper } from "./ConfigHelper";
+import { OtterAi } from "../src/lib/transcription";
 
 export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   console.log("Initializing IPC handlers");
@@ -447,6 +448,113 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
           path: screenshot,
           conversationId
         });
+
+        // Otter.ai integration handlers
+        ipcMain.handle("otterai:get-recent-transcripts", async () => {
+          try {
+            const config = configHelper.loadConfig();
+
+            // Get Otter.ai credentials from config
+            const otterCredentials = {
+              email: config.otterAiEmail || process.env.OTTER_AI_EMAIL,
+              password: config.otterAiPassword || process.env.OTTER_AI_PASSWORD
+            };
+
+            // Check if credentials are available
+            if (!otterCredentials.email || !otterCredentials.password) {
+              return {
+                success: false,
+                error: "Otter.ai credentials not configured. Please set them in the settings."
+              };
+            }
+
+            // Initialize Otter.ai client
+            const otterAi = new OtterAi({
+              credentials: otterCredentials
+            });
+
+            // Login and get recent transcripts
+            await otterAi.login();
+            const speeches = await otterAi.getSpeeches({ limit: 20 });
+
+            return {
+              success: true,
+              data: speeches
+            };
+          } catch (error) {
+            console.error("Error fetching Otter.ai transcripts:", error);
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : "Failed to fetch transcripts"
+            };
+          }
+        });
+
+        ipcMain.handle("otterai:get-transcript-details", async (_event, speechId) => {
+          try {
+            const config = configHelper.loadConfig();
+
+            // Get Otter.ai credentials from config
+            const otterCredentials = {
+              email: config.otterAiEmail || process.env.OTTER_AI_EMAIL,
+              password: config.otterAiPassword || process.env.OTTER_AI_PASSWORD
+            };
+
+            // Check if credentials are available
+            if (!otterCredentials.email || !otterCredentials.password) {
+              return {
+                success: false,
+                error: "Otter.ai credentials not configured. Please set them in the settings."
+              };
+            }
+
+            // Initialize Otter.ai client
+            const otterAi = new OtterAi({
+              credentials: otterCredentials
+            });
+
+            // Login and get transcript details
+            await otterAi.login();
+            const speechDetails = await otterAi.getSpeech(speechId);
+
+            return {
+              success: true,
+              data: speechDetails
+            };
+          } catch (error) {
+            console.error("Error fetching Otter.ai transcript details:", error);
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : "Failed to fetch transcript details"
+            };
+          }
+        });
+
+        ipcMain.handle("otterai:save-credentials", async (_event, credentials) => {
+          try {
+            // Validate input
+            if (!credentials || !credentials.email || !credentials.password) {
+              return {
+                success: false,
+                error: "Invalid credentials. Both email and password are required."
+              };
+            }
+
+            // Update config with new credentials
+            configHelper.updateConfig({
+              otterAiEmail: credentials.email,
+              otterAiPassword: credentials.password
+            });
+
+            return { success: true };
+          } catch (error) {
+            console.error("Error saving Otter.ai credentials:", error);
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : "Failed to save credentials"
+            };
+          }
+        });
       }
 
       return result;
@@ -456,6 +564,114 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
     }
   });
 
+// Otter.ai integration handlers
+console.log("Registering Otter.ai IPC handlers");
+console.log("Registering otterai:get-recent-transcripts");
+ipcMain.handle("otterai:get-recent-transcripts", async () => {
+  try {
+    const config = configHelper.loadConfig();
+
+    // Get Otter.ai credentials from config
+    const otterCredentials = {
+      email: config.otterAiEmail || process.env.OTTER_AI_EMAIL,
+      password: config.otterAiPassword || process.env.OTTER_AI_PASSWORD
+    };
+
+    // Check if credentials are available
+    if (!otterCredentials.email || !otterCredentials.password) {
+      return {
+        success: false,
+        error: "Otter.ai credentials not configured. Please set them in the settings."
+      };
+    }
+
+    // Initialize Otter.ai client
+    const otterAi = new OtterAi({
+      credentials: otterCredentials
+    });
+
+    // Login and get recent transcripts
+    await otterAi.login();
+    const speeches = await otterAi.getSpeeches({ limit: 20 });
+
+    return {
+      success: true,
+      data: speeches
+    };
+  } catch (error) {
+    console.error("Error fetching Otter.ai transcripts:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch transcripts"
+    };
+  }
+});
+console.log("Registering otterai:get-transcript-details");
+ipcMain.handle("otterai:get-transcript-details", async (_event, speechId) => {
+  try {
+    const config = configHelper.loadConfig();
+
+    // Get Otter.ai credentials from config
+    const otterCredentials = {
+      email: config.otterAiEmail || process.env.OTTER_AI_EMAIL,
+      password: config.otterAiPassword || process.env.OTTER_AI_PASSWORD
+    };
+
+    // Check if credentials are available
+    if (!otterCredentials.email || !otterCredentials.password) {
+      return {
+        success: false,
+        error: "Otter.ai credentials not configured. Please set them in the settings."
+      };
+    }
+
+    // Initialize Otter.ai client
+    const otterAi = new OtterAi({
+      credentials: otterCredentials
+    });
+
+    // Login and get transcript details
+    await otterAi.login();
+    const speechDetails = await otterAi.getSpeech(speechId);
+
+    return {
+      success: true,
+      data: speechDetails
+    };
+  } catch (error) {
+    console.error("Error fetching Otter.ai transcript details:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch transcript details"
+    };
+  }
+});
+console.log("Registering otterai:save-credentials");
+ipcMain.handle("otterai:save-credentials", async (_event, credentials) => {
+  try {
+    // Validate input
+    if (!credentials || !credentials.email || !credentials.password) {
+      return {
+        success: false,
+        error: "Invalid credentials. Both email and password are required."
+      };
+    }
+
+    // Update config with new credentials
+    configHelper.updateConfig({
+      otterAiEmail: credentials.email,
+      otterAiPassword: credentials.password
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error saving Otter.ai credentials:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to save credentials"
+    };
+  }
+});
   // Get conversation screenshots handler
   ipcMain.handle("get-conversation-screenshots", async (_event, conversationId) => {
     try {

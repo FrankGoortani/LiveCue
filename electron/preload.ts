@@ -275,6 +275,12 @@ const electronAPI = {
       ipcRenderer.removeListener("trigger-cmd-enter", subscription);
     };
   },
+
+  // Otter.ai integration
+  otterAiGetRecentTranscripts: () => ipcRenderer.invoke("otterai:get-recent-transcripts"),
+  otterAiGetTranscriptDetails: (speechId: string) => ipcRenderer.invoke("otterai:get-transcript-details", speechId),
+  otterAiSaveCredentials: (credentials: { email: string; password: string }) =>
+    ipcRenderer.invoke("otterai:save-credentials", credentials),
 };
 
 // Before exposing the API

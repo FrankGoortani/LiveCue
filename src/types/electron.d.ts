@@ -74,6 +74,25 @@ export interface ElectronAPI {
     eventName: string,
     callback: (...args: any[]) => void
   ) => void;
+
+  // Otter.ai integration
+  otterAiGetRecentTranscripts: () => Promise<{
+    success: boolean;
+    data?: any[];
+    error?: string;
+  }>;
+  otterAiGetTranscriptDetails: (speechId: string) => Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }>;
+  otterAiSaveCredentials: (credentials: {
+    email: string;
+    password: string;
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
 }
 
 declare global {

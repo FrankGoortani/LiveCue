@@ -134,6 +134,7 @@
     "@supabase/supabase-js": "^2.49.4",
     "@tanstack/react-query": "^5.64.0",
     "axios": "^1.7.7",
+    "axios-cookiejar-support": "^6.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "diff": "^7.0.0",
@@ -141,6 +142,7 @@
     "electron-log": "^5.2.4",
     "electron-store": "^10.0.0",
     "electron-updater": "^6.3.9",
+    "fast-xml-parser": "^5.2.1",
     "form-data": "^4.0.1",
     "lucide-react": "^0.460.0",
     "openai": "^4.28.4",
@@ -151,6 +153,7 @@
     "react-syntax-highlighter": "^15.6.1",
     "screenshot-desktop": "^1.15.0",
     "tailwind-merge": "^2.5.5",
+    "tough-cookie": "^5.1.2",
     "uuid": "^11.0.3"
   },
   "devDependencies": {
@@ -167,6 +170,7 @@
     "@types/react-dom": "^18.2.22",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/screenshot-desktop": "^1.12.3",
+    "@types/tough-cookie": "^4.0.5",
     "@types/uuid": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",

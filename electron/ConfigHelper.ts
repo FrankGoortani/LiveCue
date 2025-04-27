@@ -13,6 +13,9 @@ interface Config {
   debuggingModel: string;
   language: string;
   opacity: number;
+  // Otter.ai integration credentials
+  otterAiEmail: string;
+  otterAiPassword: string;
 }
 
 export class ConfigHelper extends EventEmitter {
@@ -25,6 +28,9 @@ export class ConfigHelper extends EventEmitter {
     debuggingModel: "gemini-2.0-flash",
     language: "python",
     opacity: 1.0,
+    // Default empty Otter.ai credentials
+    otterAiEmail: "",
+    otterAiPassword: ""
   };
 
   constructor() {
@@ -184,6 +190,17 @@ export class ConfigHelper extends EventEmitter {
       config.apiKey = process.env.GEMINI_API_KEY;
       config.apiProvider = "gemini";
       console.log("Using Gemini API key from environment variable");
+    }
+
+    // Check for Otter.ai credentials
+    if (process.env.OTTER_AI_EMAIL) {
+      config.otterAiEmail = process.env.OTTER_AI_EMAIL;
+      console.log("Using Otter.ai email from environment variable");
+    }
+
+    if (process.env.OTTER_AI_PASSWORD) {
+      config.otterAiPassword = process.env.OTTER_AI_PASSWORD;
+      console.log("Using Otter.ai password from environment variable");
     }
 
     // Check for models (if specified)

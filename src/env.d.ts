@@ -6,6 +6,11 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
   readonly NODE_ENV: string;
+
+  // Otter.ai Credentials
+  readonly VITE_OTTERAI_EMAIL?: string;
+  readonly VITE_OTTERAI_PASSWORD?: string;
+  readonly VITE_OTTERAI_BASE_URL?: string;
 }
 
 interface ImportMeta {
@@ -63,6 +68,25 @@ interface ElectronAPI {
   installUpdate: () => void;
   onUpdateAvailable: (callback: (info: any) => void) => () => void;
   onUpdateDownloaded: (callback: (info: any) => void) => () => void;
+
+  // Otter.ai integration
+  otterAiGetRecentTranscripts: () => Promise<{
+    success: boolean;
+    data?: any[];
+    error?: string;
+  }>;
+  otterAiGetTranscriptDetails: (speechId: string) => Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+  }>;
+  otterAiSaveCredentials: (credentials: {
+    email: string;
+    password: string;
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
 }
 
 interface Window {
